@@ -1,0 +1,6 @@
+Model weights are hosted externally due to file size limits on GitHub.
+
+Download the fine-tuned Pretrained ResNet34 U-Net checkpoint here:
+https://www.kaggle.com/models/mennathabett/pretrained-resnet34-u-net
+
+After downloading, place the .pth file into this weights/ folder before running app.py.
