@@ -1,6 +1,6 @@
 # Water Segmentation using Multispectral Satellite Imagery — A Comparative Study
 
-A comparative study of two approaches to segmenting water bodies from 12-channel Sentinel-2/Landsat harmonized satellite imagery: a **U-Net built entirely from scratch** versus a **pretrained ResNet34 encoder fine-tuned** for the same task, using PyTorch and `segmentation-models-pytorch`.
+A comparative study of two approaches to segmenting water bodies from 12-channel Sentinel-2/Landsat harmonized satellite imagery: a **U-Net built entirely from scratch** versus a **pretrained ResNet34 encoder fine-tuned** for the same task, using PyTorch and `segmentation-models-pytorch`. The winning model is deployed as a local Flask REST API with a simple web UI.
 
 | Model | IoU | F1-score | Precision | Recall |
 |---|---|---|---|---|
@@ -23,6 +23,8 @@ The pretrained model improved validation IoU by **+0.0260** over the from-scratc
 - [Fine-Tuning Strategy Comparison](#fine-tuning-strategy-comparison)
 - [Comparative Results](#comparative-results)
 - [Discussion — Which Model Wins, and Why](#discussion--which-model-wins-and-why)
+- [Qualitative Sample Comparison (10 Tiles)](#qualitative-sample-comparison-10-tiles)
+- [Deployment — Flask REST API + Web UI](#deployment--flask-rest-api--web-ui)
 - [Repository Structure](#repository-structure)
 - [How to Run](#how-to-run)
 - [Notes & Observations](#notes--observations)
@@ -32,7 +34,7 @@ The pretrained model improved validation IoU by **+0.0260** over the from-scratc
 
 ## Objective
 
-Segmenting water bodies accurately from satellite imagery supports flood monitoring, water resource management, and environmental conservation. This project builds a full pipeline — from raw multispectral `.tif` exploration to two trained, evaluated segmentation models — and directly compares a from-scratch architecture against a transfer-learning approach, using only 12-band satellite input.
+Segmenting water bodies accurately from satellite imagery supports flood monitoring, water resource management, and environmental conservation. This project builds a full pipeline — from raw multispectral `.tif` exploration to two trained, evaluated segmentation models, deployed as a working local web application — and directly compares a from-scratch architecture against a transfer-learning approach, using only 12-band satellite input.
 
 ## Dataset
 
@@ -207,6 +209,81 @@ The pretrained model achieves a **measurably higher IoU (+0.0260)** and higher s
 
 ---
 
+## Qualitative Sample Comparison (10 Tiles)
+
+To further validate the winning model (Pretrained ResNet34 U-Net, Strategy A) beyond aggregate metrics, 10 hand-picked tiles — spanning a range of water coverage from none to majority-water — were run through the model, with the input RGB composite, ground-truth mask, and predicted mask shown side by side for each.
+
+<p align="center">
+  <img src="images/chosen_samples_comparison.png" width="800">
+  <br>
+  <em>10 selected samples — Input (RGB), Ground Truth, and Prediction, showing the model correctly handling irregular water boundaries, small water bodies, and zero-water tiles.</em>
+</p>
+
+---
+
+## Deployment — Flask REST API + Web UI
+
+The best-performing model from the comparative study (Pretrained ResNet34 U-Net, Strategy A, IoU 0.8299) is deployed as a local Flask REST API with a simple HTML frontend for interactive testing.
+
+### Endpoints
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/` | GET | Serves the HTML upload form |
+| `/predict` | POST | Accepts a multipart `.tif` upload (field name `file`), returns the predicted binary mask as a **PNG image** |
+| `/predict_json` | POST | Same as above, but returns the mask as a **JSON array** plus the predicted water pixel percentage |
+
+The model, its checkpoint, and the per-band normalization statistics (`band_mean_train.npy`, `band_std_train.npy` — computed on the training split only, matching the training pipeline exactly) are loaded once at server startup, not per-request, for fast inference.
+
+### Running Locally
+
+```bash
+pip install -r requirements.txt
+python app.py
+```
+
+Then open `http://127.0.0.1:5000` in a browser. Upload a 12-band `.tif` tile (128×128) and click **Predict** to view the segmentation mask.
+
+> **Note:** on Windows, if your user folder path contains a space (e.g. `C:\Users\First Last\...`), invoke the interpreter with the full path quoted and prefixed by `&` in PowerShell — e.g. `& "C:\Users\First Last\...\python.exe" app.py` — to avoid a path-parsing issue that can otherwise trigger an unrelated "Select an app to open" dialog.
+
+### API Testing
+
+The API was tested locally with 3 sample `.tif` tiles covering a range of water coverage, verifying the returned mask is spatially coherent and consistent with the corresponding ground-truth mask from the training dataset.
+
+<p align="center">
+  <img src="images/flask_app_demo_45.png" width="500">
+  <br>
+  <em>Test 1 — tile 45.tif, high water coverage. The predicted mask correctly captures a large, irregular water body.</em>
+</p>
+
+<p align="center">
+  <img src="images/flask_app_demo_102.png" width="500">
+  <br>
+  <em>Test 2 — tile 102.tif, moderate water coverage. The predicted mask shows a river-like band cutting through the tile alongside smaller disconnected water patches.</em>
+</p>
+
+<p align="center">
+  <img src="images/flask_app_demo_290.png" width="500">
+  <br>
+  <em>Test 3 — tile 290.tif, high water coverage. The predicted mask is water-dominant, correctly outlining a large irregular shoreline against a smaller landmass.</em>
+</p>
+
+| Sample | Endpoint tested | Result |
+|---|---|---|
+| `45.tif` | `/predict` | High water coverage — mask correctly captures a large, irregular water body |
+| `102.tif` | `/predict` | Moderate water coverage — mask correctly captures a river-like band plus smaller patches |
+| `290.tif` | `/predict` | High water coverage — mask correctly captures a large water-dominant region with an irregular shoreline |
+
+### Model Weights
+
+The per-band normalization statistics (`band_mean_train.npy`, `band_std_train.npy`) are small and committed directly to this repo under `water-segmentation-app/weights/`. The trained model checkpoint (`.pth`), however, exceeds GitHub's file size limits and is hosted externally.
+
+**Download the checkpoint here:** [Pretrained ResNet34 U-Net weights](https://www.kaggle.com/models/mennathabett/pretrained-resnet34-u-net)
+
+After downloading, place the `.pth` file into the `water-segmentation-app/weights/` folder (alongside the already-committed `.npy` files) before running `app.py`. See `weights/weights_link.txt` for the same link.
+
+---
+
 ## Repository Structure
 
 ```
@@ -219,11 +296,32 @@ water-segmentation/
 │   ├── training_curves_scratch.png
 │   ├── prediction_samples_scratch.png
 │   ├── finetune_strategy_comparison.png
-│   └── prediction_samples_pretrained.png
-└── water-segmentation-using-multispectral-data-study.ipynb
+│   ├── prediction_samples_pretrained.png
+│   ├── chosen_samples_comparison.png
+│   ├── flask_app_demo_45.png
+│   ├── flask_app_demo_102.png
+│   └── flask_app_demo_290.png
+├── water-segmentation-using-multispectral-data-study.ipynb
+└── water-segmentation-app/
+    ├── app.py
+    ├── model.py
+    ├── inference.py
+    ├── requirements.txt
+    ├── weights/
+    │   ├── band_mean_train.npy       # committed directly — small file
+    │   ├── band_std_train.npy        # committed directly — small file
+    │   └── weights_link.txt          # link to the large .pth checkpoint (hosted externally)
+    ├── templates/
+    │   └── index.html
+    ├── static/
+    │   └── style.css
+    └── sample_inputs/
+        └── (sample .tif tiles used for API testing)
 ```
 
 ## How to Run
+
+### Training / Notebook
 
 1. Clone the repo and open the notebook in Jupyter, Kaggle, or Colab (GPU recommended).
 2. Install dependencies:
@@ -236,6 +334,10 @@ water-segmentation/
    - `best_unet_water_seg.pth` — from-scratch U-Net
    - `best_pretrained_full_finetune.pth` — Strategy A (winning pretrained checkpoint)
    - `best_pretrained_warmup_finetune.pth` — Strategy B
+
+### Deployment App
+
+See [Deployment — Flask REST API + Web UI](#deployment--flask-rest-api--web-ui) above.
 
 ## Notes & Observations
 
