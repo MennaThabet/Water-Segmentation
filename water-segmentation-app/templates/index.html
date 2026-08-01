@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Water Segmentation</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <h1>Water Body Segmentation</h1>
+    <p>Upload a 12-band .tif satellite tile (128x128) to get a binary water mask.</p>
+
+    <form id="uploadForm">
+        <input type="file" id="fileInput" name="file" accept=".tif" required>
+        <button type="submit">Predict</button>
+    </form>
+
+    <div id="result"></div>
+
+    <script>
+        document.getElementById("uploadForm").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById("fileInput");
+            const formData = new FormData();
+            formData.append("file", fileInput.files[0]);
+
+            document.getElementById("result").innerHTML = "Running inference...";
+
+            const response = await fetch("/predict", {
+                method: "POST",
+                body: formData
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                document.getElementById("result").innerHTML = `Error: ${err.error}`;
+                return;
+            }
+
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            document.getElementById("result").innerHTML =
+                `<h3>Predicted Mask:</h3><img src="${url}" alt="predicted mask">`;
+        });
+    </script>
+</body>
+</html>
